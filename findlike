@@ -1,0 +1,63 @@
+#!/bin/sh
+
+# POSIX Shell function to implement mininal find-like command
+
+# Difference between find behavior :
+# * does not follow dot-named item (like: find ! -name '.*' )
+
+# Usefull for :
+# * call a shell function (find use fork, can not call defined function)
+# * detecting deadlink and more ...
+
+# ! not exists (or permission denied)
+# f file
+# d directory
+# s socket
+# p pipe (FIFO)
+# b block special file
+# c character special file
+# U unknown
+# lX symlink of type X
+# l! dead [sym]link
+# lf symlink to file
+# ld symlink to directory
+
+# pfind() <callback> [<directory> [<directories ...>]]
+pfind() {
+	local hand="$1";shift
+	if [ $# -eq 0 ]; then
+		pfind "$hand" .
+		return $?
+	fi
+	for item in "$@"; do
+		local type1=''
+		if [ -h "$item" ]; then
+			type1='l'
+		elif [ ! -e "$item" ]; then continue ;# empty directory => item='dir/*'
+		elif [ -d "$item" ]; then
+			"$hand" 'd' "$item" && \
+			[ -r "$item/" ] && \
+			for childitem in "$item"/*; do
+				pfind "$hand" "$childitem"
+			done
+			continue
+		fi
+		local type='U'
+		if [ ! -e "$item" ]; then type='!';
+		elif [ -f "$item" ]; then type='f'; 
+		elif [ -d "$item" ]; then type='d';
+		elif [ -S "$item" ]; then type='s';
+		elif [ -p "$item" ]; then type='p';
+		elif [ -b "$item" ]; then type='b';
+		elif [ -c "$item" ]; then type='c';
+		fi
+		"$hand" "$type1$type" "$item"
+	done
+}
+
+x() {
+	echo "$1 $2"
+	if [ "$1" = "d" ] && [ ! -r "$2" ]; then return 1; fi
+	return 0
+}
+pfind x "$@"
