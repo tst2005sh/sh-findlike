@@ -3,7 +3,8 @@
 # POSIX Shell function to implement mininal find-like command
 
 # Difference between find behavior :
-# * does not follow dot-named item (like: find ! -name '.*' )
+# * does not follow dot-named item (like: find ! -name '.*' ) EDIT: it now follow hided files
+
 
 # Usefull for :
 # * call a shell function (find use fork, can not call defined function)
@@ -29,30 +30,42 @@ pfind() {
 		pfind "$hand" .
 		return $?
 	fi
-	for item in "$@"; do
-		local type1=''
-		if [ -h "$item" ]; then
-			type1='l'
-		elif [ ! -e "$item" ]; then continue ;# empty directory => item='dir/*'
-		elif [ -d "$item" ]; then
-			"$hand" 'd' "$item" && \
-			[ -r "$item/" ] && \
+	if [ $# -gt 1 ] ;then
+		for item in "$@"; do
+			pfind "$hand" "$item"
+		done
+	fi
+	local item="$1"
+	local type1=''
+	if [ -h "$item" ]; then
+		type1='l'
+	elif [ ! -e "$item" ]; then continue ;# empty directory => item='dir/*'
+	elif [ -d "$item" ]; then
+		if "$hand" 'd' "$item" && \
+		[ -r "$item/" ]; then
 			for childitem in "$item"/*; do
 				pfind "$hand" "$childitem"
 			done
-			continue
+			for childitem in "$item"/.*; do
+				case "$childitem" in
+					*/.|*/..) continue ;;
+				esac
+				pfind "$hand" "$childitem"
+			done
 		fi
-		local type='U'
-		if [ ! -e "$item" ]; then type='!';
-		elif [ -f "$item" ]; then type='f'; 
-		elif [ -d "$item" ]; then type='d';
-		elif [ -S "$item" ]; then type='s';
-		elif [ -p "$item" ]; then type='p';
-		elif [ -b "$item" ]; then type='b';
-		elif [ -c "$item" ]; then type='c';
-		fi
-		"$hand" "$type1$type" "$item"
-	done
+		return 0
+	fi
+	local type='U'
+	if [ ! -e "$item" ]; then type='!';
+	elif [ -f "$item" ]; then type='f'; 
+	elif [ -d "$item" ]; then type='d';
+	elif [ -S "$item" ]; then type='s';
+	elif [ -p "$item" ]; then type='p';
+	elif [ -b "$item" ]; then type='b';
+	elif [ -c "$item" ]; then type='c';
+	fi
+	"$hand" "$type1$type" "$item"
+	return $?
 }
 
 x() {
