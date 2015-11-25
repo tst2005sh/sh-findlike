@@ -3,7 +3,7 @@
 # POSIX Shell function to implement mininal find-like command
 
 # Difference between find behavior :
-# * does not follow dot-named item (like: find ! -name '.*' ) EDIT: it now follow hided files
+# * does not follow dot-named item (like: find ! -name '.*' ) EDIT: it now follow hidden files
 
 
 # Usefull for :
