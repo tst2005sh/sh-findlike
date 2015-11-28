@@ -2,12 +2,12 @@
 
 # POSIX Shell function to implement mininal find-like command
 
-# Difference between find behavior :
+# Difference with find behavior :
 # * does not follow dot-named item (like: find ! -name '.*' ) EDIT: it now follow hidden files
 
 
-# Usefull for :
-# * call a shell function (find use fork, can not call defined function)
+# Useful for :
+# * call a shell function (find use subprocess, can not call defined function)
 # * detecting deadlink and more ...
 
 # ! not exists (or permission denied)
@@ -26,14 +26,20 @@
 # pfind() <callback> [<directory> [<directories ...>]]
 pfind() {
 	local hand="$1";shift
+#	local level=${level:-0}
 	if [ $# -eq 0 ]; then
+#		level=$(( ${level:-0} + 1))
 		pfind "$hand" .
+#		level=$(( ${level:-0} - 1))
 		return $?
 	fi
 	if [ $# -gt 1 ] ;then
+#		level=$(( ${level:-0} + 1))
 		for item in "$@"; do
 			pfind "$hand" "$item"
 		done
+#		level=$(( ${level:-0} - 1))
+		return $?
 	fi
 	local item="$1"
 	local type1=''
@@ -43,7 +49,11 @@ pfind() {
 	elif [ -d "$item" ]; then
 		if "$hand" 'd' "$item" && \
 		[ -r "$item/" ]; then
+			level=$(( ${level:-0} + 1))
 			for childitem in "$item"/*; do
+				case "$childitem" in
+					*/.|*/..) continue ;;
+				esac
 				pfind "$hand" "$childitem"
 			done
 			for childitem in "$item"/.*; do
@@ -52,7 +62,9 @@ pfind() {
 				esac
 				pfind "$hand" "$childitem"
 			done
+			level=$(( ${level:-0} - 1))
 		fi
+		#level=$(( ${level:-0} - 1))
 		return 0
 	fi
 	local type='U'
@@ -65,12 +77,47 @@ pfind() {
 	elif [ -c "$item" ]; then type='c';
 	fi
 	"$hand" "$type1$type" "$item"
+#	level=$(( ${level:-0} - 1))
 	return $?
 }
 
-x() {
-	echo "$1 $2"
+mindepth() {
+	if [ ${level:-0} -ge ${MINDEPTH:-0} ]; then
+		return 1
+	fi
+	return 0
+}
+
+maxdepth() {
+	if [ -n "${MAXDEPTH:-}" ] && [ ${level:-0} -gt ${MAXDEPTH} ]; then
+		return 1
+	fi
+	return 0
+}
+
+showall() {
+	maxdepth || return 1
+	mindepth || echo "$1 $2 (${level:-0})"
 	if [ "$1" = "d" ] && [ ! -r "$2" ]; then return 1; fi
 	return 0
 }
-pfind x "$@"
+
+showdeadlink() {
+	maxdepth || return 1
+	if [ "$1" = "l!" ]; then
+		mindepth || echo "$2"
+	fi
+}
+showfile() {
+	maxdepth || return 1
+	case "$1" in
+		f|lf)
+			mindepth 1 || echo "${level} $2" ;;
+	esac
+}
+
+if [ $# -eq 0 ]; then
+	echo "Usage: $0 <showfile|showall|showdeadlink> [directories...]"
+	exit 1
+fi
+pfind "$@"
