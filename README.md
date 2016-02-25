@@ -11,19 +11,18 @@ Features
 Supported type
 --------------
 
- * ! not exists (or permission denied)
- * f file
- * d directory
- * s socket
- * p pipe (FIFO)
- * b block special file
- * c character special file
- * U unknown
-
- * l`X` symlink of type `X`
- * l! dead [sym]link
- * lf symlink to file
- * ld symlink to directory
+ * `!` not exists (or permission denied)
+ * `f` file
+ * `d` directory
+ * `s` socket
+ * `p` pipe (FIFO)
+ * `b` block special file
+ * `c` character special file
+ * `U` unknown
+ * `l`X symlink of type X (like `l!`, `lf`, ..., `lU`)
+ * `l!` dead [sym]link
+ * `lf` symlink to file
+ * `ld` symlink to directory
 
 
 Sample of use
