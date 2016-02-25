@@ -26,7 +26,7 @@
 # pfind() <callback> [<directory> [<directories ...>]]
 pfind() {
 	local hand="$1";shift
-#	local level=${level:-0}
+	local level=${level:-0} # usefull in case of MINDEPTH=0
 	if [ $# -eq 0 ]; then
 #		level=$(( ${level:-0} + 1))
 		pfind "$hand" .
@@ -69,7 +69,7 @@ pfind() {
 	fi
 	local type='U'
 	if [ ! -e "$item" ]; then type='!';
-	elif [ -f "$item" ]; then type='f'; 
+	elif [ -f "$item" ]; then type='f';
 	elif [ -d "$item" ]; then type='d';
 	elif [ -S "$item" ]; then type='s';
 	elif [ -p "$item" ]; then type='p';
@@ -112,12 +112,19 @@ showfile() {
 	maxdepth || return 1
 	case "$1" in
 		f|lf)
+			mindepth 1 || echo "${level:-0} $2" ;;
+	esac
+}
+showdir() {
+	maxdepth || return 1
+	case "$1" in
+		d|ld)
 			mindepth 1 || echo "${level} $2" ;;
 	esac
 }
 
 if [ $# -eq 0 ]; then
-	echo "Usage: $0 <showfile|showall|showdeadlink> [directories...]"
+	echo "Usage: $0 <showfile|showdir|showall|showdeadlink> [directories...]"
 	exit 1
 fi
 pfind "$@"
