@@ -27,25 +27,22 @@
 pfind() {
 	local hand="$1";shift
 	local level=${level:-0} # usefull in case of MINDEPTH=0
+	local status=0
 	if [ $# -eq 0 ]; then
-#		level=$(( ${level:-0} + 1))
-		pfind "$hand" .
-#		level=$(( ${level:-0} - 1))
-		return $?
-	fi
-	if [ $# -gt 1 ] ;then
-#		level=$(( ${level:-0} + 1))
+		pfind "$hand" . || status=1
+		return $status
+	elif [ $# -gt 1 ] ;then
 		for item in "$@"; do
-			pfind "$hand" "$item"
+			pfind "$hand" "$item" || status=1
 		done
-#		level=$(( ${level:-0} - 1))
-		return $?
+		return $status
 	fi
 	local item="$1"
 	local type1=''
 	if [ -h "$item" ]; then
 		type1='l'
-	elif [ ! -e "$item" ]; then continue ;# empty directory => item='dir/*'
+	elif [ ! -e "$item" ]; then
+		return 1
 	elif [ -d "$item" ]; then
 		if "$hand" 'd' "$item" && \
 		[ -r "$item/" ]; then
@@ -54,18 +51,17 @@ pfind() {
 				case "$childitem" in
 					*/.|*/..) continue ;;
 				esac
-				pfind "$hand" "$childitem"
+				pfind "$hand" "$childitem" || status=1
 			done
 			for childitem in "$item"/.*; do
 				case "$childitem" in
 					*/.|*/..) continue ;;
 				esac
-				pfind "$hand" "$childitem"
+				pfind "$hand" "$childitem" || status=1
 			done
 			level=$(( ${level:-0} - 1))
 		fi
-		#level=$(( ${level:-0} - 1))
-		return 0
+		return $status
 	fi
 	local type='U'
 	if [ ! -e "$item" ]; then type='!';
@@ -76,9 +72,8 @@ pfind() {
 	elif [ -b "$item" ]; then type='b';
 	elif [ -c "$item" ]; then type='c';
 	fi
-	"$hand" "$type1$type" "$item"
-#	level=$(( ${level:-0} - 1))
-	return $?
+	"$hand" "$type1$type" "$item" || status=1
+	return $status
 }
 
 mindepth() {
