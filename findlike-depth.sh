@@ -4,37 +4,34 @@ set -e
 
 # a modified version of findlike (focus on most deep first & directory before files)
 
-# findlike [<directory> [<directories ...>]]
+# findlike [<options>] [--] [<directory> [<directories ...>]]
 findlike() {
 	local status=0
-	local mindepth
-	local maxdepth
+	local mindepth=''
+	local maxdepth=''
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			(-mindepth)	shift; mindepth="$1";;
 			(-maxdepth)	shift; maxdepth="$1";;
 			(--)		shift; break;;
 			-*) echo >&2 "ERROR: invalid option $1"; return 1;;
-			*) break
+			*) break;;
 		esac
 		shift
 	done
 	local filter=foobar_filter
 	local hand=foobar
 	if [ $# -eq 0 ]; then
-		MINDEPTH="$mindepth" MAXDEPTH="$maxdepth" \
 		_findlike "$filter" "$hand" . || status=1
 		return $status
 	fi
 	for item in "$@"; do
 		if [ -d "$item" ]; then
-			MINDEPTH="$mindepth" MAXDEPTH="$maxdepth" \
 			_findlike "$filter" "$hand" "$item" || status=1
 		fi
 	done
 	for item in "$@"; do
 		if [ ! -d "$item" ]; then
-			MINDEPTH="$mindepth" MAXDEPTH="$maxdepth" \
 			_findlike "$filter" "$hand" "$item" || status=1
 		fi
 	done
@@ -59,7 +56,7 @@ _findlike() {
 		# here it seems an asked non-existant directory, show it!
 		type1='!'
 	elif [ -d "$item" ]; then
-		if "$filter" 'd' "$item"; then
+		if ( [ -z "${maxdepth:-}" ] || [ ${level:-0} -le ${maxdepth} ] ) && "$filter" 'd' "$item"; then
 			if [ -r "$item/" ]; then
 				level=$(( ${level:-0} + 1))
 				for childitem in "$item"/* "$item"/.*; do
@@ -93,87 +90,80 @@ _findlike() {
 	elif [ -b "$item" ]; then type='b';
 	elif [ -c "$item" ]; then type='c';
 	fi
-	"$filter" "$type1$type" "$item" && \
-	[ ${level:-0} -ge ${mindepth:-0} ] && \
-	"$hand" "$type1$type" "$item" || status=1
+	if [ ${level:-0} -ge ${mindepth:-0} ] && \
+	( [ -z "${maxdepth:-}" ] || [ ${level:-0} -le ${maxdepth} ] ) && \
+	"$filter" "$type1$type" "$item"; then
+		"$hand" "$type1$type" "$item" || status=1
+	fi
 	return $status
 }
 
-mindepth() {
-	if [ ${level:-0} -lt ${MINDEPTH:-0} ]; then
-		return 1
-	fi
-	return 0
-}
-
-maxdepth() {
-	if [ -n "${MAXDEPTH:-}" ] && [ ${level:-0} -gt ${MAXDEPTH} ]; then
-		return 1
-	fi
-	return 0
-}
-
 showall() {
-	#maxdepth || return 1
-	#mindepth || return 1
 	echo "$1 $2 (${level:-0})"
 	if [ "$1" = "d" ] && [ ! -r "$2" ]; then return 1; fi
 	return 0
 }
 
 showdeadlink() {
-	#maxdepth || return 1
 	if [ "$1" = "l!" ]; then
-		mindepth || echo "$2"
+		echo "$2"
 	fi
 }
 showfile() {
-	#maxdepth || return 1
 	case "$1" in
 		f|lf)
-			mindepth 1 || echo "${level:-0} $2" ;;
+			echo "${level:-0} $2" ;;
 	esac
 }
 showdir() {
-	#maxdepth || return 1
 	case "$1" in
 		d|ld)
-			mindepth 1 || echo "${level} $2" ;;
+			echo "${level} $2" ;;
 	esac
 }
 
 foobar_filter() {
-	maxdepth || return 1
-	#mindepth || return 1
-
-	#maxdepth || return 1
-	#mindepth && return 0
-
 	# skip the .git directory
 	case "$2" in
 		(*'/.git'|'.git/'*|'.git'|*'/.git/'*) return 1 ;;
 	esac
+
+	case "$1" in
+		(f) ;; # want to get time
+		(d) ;; # want to explore
+		('!'*) return 1 ;; # show invalid stuff
+		(?)  return 1 ;; # ignore special or unknown item
+		(l*) return 2 ;;
+		(*) return 1 ;; # we don't use missing case!
+	esac
 	return 0
 }
 
-foobar() {
-	#maxdepth || return 1
-	#mindepth || return 1
+getTimestampFromFS() { #FIXME: timestamp will be got from git info, not from real FS.
+	stat -c %Y -- "$1"
+}
 
-	local explore=true
+foobar() {
 	case "$1" in
-		f) ;; # want to get time
-		d) ;; # want to explore
-		'!'*) ;; # show invalid stuff
-		?) explore=false ;; # ignore special or unknown item
-		l*) explore=false ;; # we don't follow symlink FIXME: we should try to get the symlink timestamp (if the stat callow to not follow the target)
-		#'!!') return 1 ;;
-		*) explore=false ;; # we don't use missing case!
+		(d)
+			# when a dir match, all his content has been done
+			if [ -n "${recenttimestamp}" ]; then
+				echo "can apply recenttimestamp=$recenttimestamp to $2 (from $datefrom)"
+				recenttimestamp='' # reset it
+				datefrom=''
+			else
+				echo "no such date for $2 (maybe empty dir ?)"
+			fi
+		;;
+		(f)	# want to get time
+			local candidate="$(getTimestampFromFS "$2")"
+			if [ $candidate -gt ${recenttimestamp:-0} ]; then
+				echo "new most recent timestamp: $2 $(date -d @$candidate +'%Y-%m-%d %H:%M:%S')"
+				recenttimestamp="$candidate"
+				datefrom="$2"
+			fi
+		;;
 	esac
-#	if ! $explore; then
-#		printf '%s (%s) %2s %s\n' "#" "${level:-0}" "$1" "$2"
-#		return 2
-#	fi
 	printf '%s (%s) %2s %s\n' "+" "${level:-0}" "$1" "$2"
 
 	#if [ "$1" = "d" ] && [ ! -r "$2" ]; then return 1; fi # unreadable directory
